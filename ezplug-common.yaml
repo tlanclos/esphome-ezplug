@@ -1,0 +1,154 @@
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+
+esp32:
+  variant: esp32c3
+  framework:
+    type: esp-idf
+  flash_size: 4MB
+  partitions: ezplugv2.csv
+
+ota:
+  - platform: esphome
+
+captive_portal:
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+# Create a button to restart the unit from HomeAssistant. Rarely needed, but can be handy.
+button:
+  - platform: restart
+    name: Restart
+
+#==================
+# RELAY CONTROLLER
+#==================
+switch:
+  - platform: gpio
+    pin: GPIO4
+    id: relay
+    restore_mode: RESTORE_DEFAULT_OFF
+    name: Relay
+    on_turn_on:
+      - light.turn_on: power_led
+    on_turn_off:
+      - light.turn_off: power_led
+
+light:
+  #===========
+  # STATUS LED
+  #===========
+  - platform: status_led
+    id: esphome_status_led
+    pin:
+      number: GPIO1
+      inverted: true
+  #==========
+  # POWER LED
+  #==========
+  - platform: binary
+    id: power_led
+    output: power_led_output
+  
+output:
+  #==========
+  # POWER LED
+  #==========
+  - platform: gpio
+    id: power_led_output
+    pin:
+      number: GPIO6
+      inverted: true
+
+
+#===================
+# POWER INFORMATION
+#===================
+sensor:
+  - platform: hlw8012
+    sel_pin:
+      number: GPIO5
+      inverted: true
+    cf1_pin: GPIO3
+    cf_pin: GPIO7
+    model: BL0937
+    voltage_divider: 1560
+    current:
+      name: Current
+      unit_of_measurement: A
+      accuracy_decimals: 3
+      # Overcurrent protection. Device is rated for 15A
+      on_value_range:
+        - above: 15
+          then:
+            - switch.turn_off: relay
+            - homeassistant.service:
+                service: persistent_notification.create
+                data:
+                  title: "Overcurrent from ${friendly_name}"
+                data_template:
+                  message: "Power exceeded 15A, turning off!"
+    voltage:
+      name: Voltage
+      unit_of_measurement: V
+      accuracy_decimals: 1
+    power:
+      name: Power
+      id: power
+      unit_of_measurement: "W"
+      accuracy_decimals: 0
+      icon: mdi:flash-outline
+    change_mode_every: 1
+    update_interval: 2s
+  - platform: total_daily_energy
+    name: Daily Energy
+    power_id: power
+    filters:
+      # 1W = 0.001 kW
+      - multiply: 0.001
+    unit_of_measurement: kWh
+  #=====================
+  # GENERAL INFORMATION
+  #=====================
+  - platform: uptime
+    name: Uptime
+    device_class: "duration"
+    unit_of_measurement: s
+    accuracy_decimals: 0
+  - platform: wifi_signal
+    name: WiFi Signal Strength
+    update_interval: 5min
+
+text_sensor:
+  # Expose ESPHome version as a sensor
+  - platform: version
+    name: ESPHome Version
+  # Expose WiFi information as a sensor
+  - platform: wifi_info
+    ip_address:
+      name: IP
+    ssid:
+      name: SSID
+    bssid:
+      name: BSSID
+    mac_address:
+      name: MAC
+
+binary_sensor:
+  - platform: status
+    name: Status
+  #=================
+  # PHYSICAL BUTTON
+  #=================
+  - platform: gpio
+    name: Button
+    use_interrupt: false
+    pin:
+      number: GPIO20
+      mode: INPUT_PULLUP
+      inverted: true
+    on_press:
+      - switch.toggle: relay
