@@ -1,6 +1,16 @@
 esphome:
   name: "${name}"
   friendly_name: "${friendly_name}"
+  on_boot:
+    priority: -100
+    then:
+      - if:
+          condition:
+            switch.is_on: relay
+          then:
+            - light.turn_on: power_led
+          else:
+            - light.turn_off: power_led
 
 esp32:
   variant: esp32c3
